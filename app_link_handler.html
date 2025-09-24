@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opening Your App...</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: white;
+        }
+        
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 400px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.3s;
+        }
+        
+        .button:hover {
+            background: #45a049;
+        }
+        
+        .button.secondary {
+            background: #008CBA;
+        }
+        
+        .button.secondary:hover {
+            background: #007B9A;
+        }
+        
+        #status {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Opening Your App...</h2>
+        <div class="spinner"></div>
+        <div id="status">Attempting to launch the app...</div>
+        
+        <div id="fallback-buttons" style="display: none;">
+            <p>Couldn't open the app automatically?</p>
+            <a href="#" id="try-again-btn" class="button">Try Again</a>
+            <a href="#" id="play-store-btn" class="button secondary">Open Play Store</a>
+        </div>
+    </div>
+
+    <script>
+        // Configuration for OneApp
+        const APP_CONFIG = {
+            packageName: 'com.onelab.oneapp',
+            appScheme: 'earnscapegig://open', // Using your custom scheme
+            playStoreUrl: 'https://play.google.com/store/apps/details?id=com.onelab.oneapp&hl=en',
+            appStoreUrl: 'https://apps.apple.com/app/oneapp/id123456789', // Update with your iOS App Store URL if available
+            fallbackUrl: 'https://earnscape.com/',
+            
+            // Flutter-specific deep link paths
+            deepLinkPath: '/home', // Default path to open in your Flutter app
+            customData: {} // Any custom data you want to pass to your Flutter app
+        };
+
+        let attemptCount = 0;
+        let hasAppOpened = false;
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function showFallbackButtons() {
+            document.getElementById('fallback-buttons').style.display = 'block';
+            document.querySelector('.spinner').style.display = 'none';
+        }
+
+        function detectDevice() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            
+            if (/android/i.test(userAgent)) {
+                return 'android';
+            }
+            
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                return 'ios';
+            }
+            
+            return 'other';
+        }
+
+        function openPlayStoreApp() {
+            // Try to open Play Store app directly
+            const playStoreAppUrl = `market://details?id=${APP_CONFIG.packageName}`;
+            
+            updateStatus('Opening Play Store app...');
+            
+            // Create hidden iframe to attempt opening Play Store app
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = playStoreAppUrl;
+            document.body.appendChild(iframe);
+            
+            // Fallback to browser Play Store after delay
+            setTimeout(() => {
+                if (!hasAppOpened) {
+                    updateStatus('Opening Play Store in browser...');
+                    window.location.href = APP_CONFIG.playStoreUrl;
+                }
+            }, 2000);
+        }
+
+        function getUrlParameters() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const params = {};
+            
+            // Get parameters from URL query string
+            for (const [key, value] of urlParams) {
+                params[key] = value;
+            }
+            
+            // Get parameters from URL hash
+            for (const [key, value] of hashParams) {
+                params[key] = value;
+            }
+            
+            return params;
+        }
+
+        function buildDeepLinkWithParams(baseUrl, params) {
+            const url = new URL(baseUrl);
+            
+            // Add all parameters to the URL
+            Object.keys(params).forEach(key => {
+                url.searchParams.append(key, params[key]);
+            });
+            
+            return url.toString();
+        }
+
+        function tryOpenApp() {
+            attemptCount++;
+            updateStatus(`Attempting to open app (${attemptCount}/2)...`);
+            
+            // Get all URL parameters
+            const urlParams = getUrlParameters();
+            console.log('URL Parameters:', urlParams);
+            
+            const device = detectDevice();
+            
+            if (device === 'android') {
+                // Build URLs with parameters
+                const baseSchemeUrl = `${APP_CONFIG.appScheme}${APP_CONFIG.deepLinkPath}`;
+                const appSchemeWithParams = buildDeepLinkWithParams(baseSchemeUrl, urlParams);
+                
+                // For intent URL, we need to construct it differently
+                const intentPath = `${APP_CONFIG.deepLinkPath}${Object.keys(urlParams).length > 0 ? '?' + new URLSearchParams(urlParams).toString() : ''}`;
+                const intentUrl = `intent://${intentPath.substring(1)}#Intent;scheme=${APP_CONFIG.appScheme.split('://')[0]};package=${APP_CONFIG.packageName};S.browser_fallback_url=${encodeURIComponent(APP_CONFIG.playStoreUrl)};end`;
+                
+                console.log('Intent URL:', intentUrl);
+                console.log('App Scheme URL:', appSchemeWithParams);
+                
+                // Try intent URL first
+                window.location.href = intentUrl;
+                
+                // Fallback after delay
+                setTimeout(() => {
+                    if (!hasAppOpened) {
+                        if (attemptCount === 1) {
+                            // Try direct scheme on first attempt
+                            updateStatus('Trying alternative method...');
+                            window.location.href = appSchemeWithParams;
+                            
+                            setTimeout(() => {
+                                if (!hasAppOpened) {
+                                    openPlayStoreApp();
+                                    setTimeout(showFallbackButtons, 3000);
+                                }
+                            }, 2000);
+                        } else {
+                            // On second attempt, go straight to Play Store
+                            openPlayStoreApp();
+                            setTimeout(showFallbackButtons, 3000);
+                        }
+                    }
+                }, 1500);
+                
+            } else if (device === 'ios') {
+                // For iOS devices - build URL with parameters
+                const iosSchemeUrl = `${APP_CONFIG.appScheme}${APP_CONFIG.deepLinkPath}`;
+                const iosUrlWithParams = buildDeepLinkWithParams(iosSchemeUrl, urlParams);
+                
+                updateStatus('iOS device detected...');
+                window.location.href = iosUrlWithParams;
+                
+                // Fallback to App Store
+                setTimeout(() => {
+                    if (!hasAppOpened) {
+                        window.location.href = APP_CONFIG.appStoreUrl;
+                    }
+                }, 2000);
+                
+            } else {
+                // For other devices, redirect to website with parameters
+                updateStatus('Redirecting to website...');
+                const websiteWithParams = buildDeepLinkWithParams(APP_CONFIG.fallbackUrl, urlParams);
+                setTimeout(() => {
+                    window.location.href = websiteWithParams;
+                }, 1500);
+            }
+        }
+
+        // Detect if app successfully opened
+        let startTime = Date.now();
+        
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                hasAppOpened = true;
+            }
+        });
+
+        window.addEventListener('blur', () => {
+            hasAppOpened = true;
+        });
+
+        window.addEventListener('focus', () => {
+            // If focus returns quickly, app probably didn't open
+            if (Date.now() - startTime < 3000 && !hasAppOpened) {
+                updateStatus('App not found. Redirecting to store...');
+                setTimeout(() => {
+                    if (detectDevice() === 'android') {
+                        openPlayStoreApp();
+                    }
+                    showFallbackButtons();
+                }, 1000);
+            }
+        });
+
+        // Set up button handlers
+        document.getElementById('try-again-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            hasAppOpened = false;
+            attemptCount = 0;
+            document.getElementById('fallback-buttons').style.display = 'none';
+            document.querySelector('.spinner').style.display = 'block';
+            tryOpenApp();
+        });
+
+        document.getElementById('play-store-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            if (detectDevice() === 'android') {
+                openPlayStoreApp();
+            } else {
+                window.location.href = APP_CONFIG.fallbackUrl;
+            }
+        });
+
+        // Start the process and show current parameters
+        const currentParams = getUrlParameters();
+        if (Object.keys(currentParams).length > 0) {
+            updateStatus(`Found parameters: ${JSON.stringify(currentParams)}`);
+        }
+        
+        setTimeout(tryOpenApp, 1000);
+    </script>
+</body>
+</html>
